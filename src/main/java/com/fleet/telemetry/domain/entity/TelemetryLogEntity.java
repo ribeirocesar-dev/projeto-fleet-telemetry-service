@@ -41,11 +41,5 @@ public class TelemetryLogEntity {
     private Double speed;
 
     @Column(nullable = false)
-    private Double batteryLevel;
-
-    @Column(nullable = false)
-    private Double engineTemperature;
-
-    @Column(nullable = false)
     private LocalDateTime timestamp;
 }
