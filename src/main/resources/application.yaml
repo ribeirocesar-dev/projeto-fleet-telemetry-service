@@ -35,8 +35,7 @@ spring:
                 acknowledge-mode: auto
 
     jackson:
-        serialization:
-            write-dates-as-timestamps: false
+        draw-dates-as-timestamps: false
 
 fleet:
     simulation:
