@@ -24,6 +24,7 @@ public class TelemetryConsumerService {
     private final TelemetryLogRepository telemetryLogRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AlertEvaluatorService alertEvaluatorService;
 
     private static final String REDIS_VEHICLE_KEY_PREFIX = "vehicle:last_position:";
     private static final String WEB_SOCKET_TOPIC = "/topic/telemetry";
@@ -46,8 +47,9 @@ public class TelemetryConsumerService {
                     .build();
 
             telemetryLogRepository.save(telemetryLogEntity);
-
             messagingTemplate.convertAndSend(WEB_SOCKET_TOPIC, payload);
+            alertEvaluatorService.evaluate(payload);
+
             log.info("Processado com sucesso -> Veículo: {} | Speed: {} km/h | Salvo no Redis, PostGIS e WebSocket",
                     payload.licensePlate(), String.format("%.1f", payload.speed()));
         } catch (Exception e) {
