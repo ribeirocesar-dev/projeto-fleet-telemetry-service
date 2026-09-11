@@ -35,13 +35,15 @@ public class VehicleQueryService {
 
     public List<VehicleResponseDTO> getAllVehicles() {
         return vehicleRepository.findAll().stream()
-                .map(v -> new VehicleResponseDTO(v.getId(), v.getLicensePlate(), v.getModel(), v.getVehicleStatus()))
+                .map(v -> new VehicleResponseDTO(v.getId(), v.getLicensePlate(), v.getModel(), v.getVehicleStatus(),
+                        v.getVehicleType()))
                 .toList();
     }
 
     public Optional<VehicleResponseDTO> getVehicleById(UUID vehicleId) {
         return vehicleRepository.findById(vehicleId)
-                .map(v -> new VehicleResponseDTO(v.getId(), v.getLicensePlate(), v.getModel(), v.getVehicleStatus()));
+                .map(v -> new VehicleResponseDTO(v.getId(), v.getLicensePlate(), v.getModel(), v.getVehicleStatus(),
+                        v.getVehicleType()));
     }
 
     public Optional<TelemetryPayloadDTO> getVehicleLastPosition(UUID vehicleId) {
