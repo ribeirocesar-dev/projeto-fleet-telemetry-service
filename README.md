@@ -26,4 +26,26 @@ Um sistema distribuído de telemetria de frota e rastreamento em tempo real em a
 
 ## Como Executar o Ambiente
 
-*(A ser atualizado conforme o progresso do desenvolvimento)*
+### Pré-requisitos
+- **Java 21+**
+- **Maven 3.8+**
+- **Docker & Docker Compose**
+
+### Execução Passo a Passo
+
+1. **Clonar o repositório:**
+   ```
+   git clone [https://github.com/SEU-USUARIO/fleet-telemetry.git](https://github.com/SEU-USUARIO/fleet-telemetry.git)
+   cd fleet-telemetry
+   ```
+2. **Iniciar infraestrutura (Redis e PostgreSQL):**
+   ```
+   docker compose up -d
+   ```
+3. **Iniciar a aplicação Backend (Spring Boot):**
+   ```
+   mvn spring-boot:run
+   ```
+4. **Acessar o Dashboard:**
+   Abra o navegador em http://localhost:8080/index.html
+   
