@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Fleet Telemetry - NOC Dashboard Pro</title>
+
+        <!-- CSS Leaflet -->
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+
+        <!-- Libs WebSocket: SockJS e StompJS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+        <!-- JS Leaflet -->
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family:
+                    "Inter",
+                    -apple-system,
+                    BlinkMacSystemFont,
+                    "Segoe UI",
+                    Roboto,
+                    sans-serif;
+                background: #0f172a;
+                color: #f8fafc;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            header {
+                background: #1e293b;
+                padding: 12px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #334155;
+            }
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            h1 {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #38bdf8;
+                letter-spacing: 0.5px;
+            }
+
+            /* KPIs Header TopBar */
+            .kpi-container {
+                display: flex;
+                gap: 15px;
+            }
+            .kpi-card {
+                background: #0f172a;
+                border: 1px solid #334155;
+                padding: 6px 14px;
+                border-radius: 6px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-width: 90px;
+            }
+            .kpi-value {
+                font-weight: bold;
+                font-size: 1.1rem;
+                color: #f8fafc;
+            }
+            .kpi-label {
+                font-size: 0.65rem;
+                color: #94a3b8;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            .status-badge {
+                padding: 6px 12px;
+                border-radius: 20px;
+                font-size: 0.75rem;
+                font-weight: bold;
+            }
+            .connected {
+                background: #064e3b;
+                color: #34d399;
+                border: 1px solid #059669;
+            }
+            .disconnected {
+                background: #450a0a;
+                color: #fca5a5;
+                border: 1px solid #dc2626;
+            }
+
+            .main-layout {
+                display: flex;
+                flex: 1;
+                position: relative;
+                overflow: hidden;
+            }
+
+            /* Sidebar de Frota */
+            .sidebar {
+                width: 340px;
+                background: #1e293b;
+                border-right: 1px solid #334155;
+                display: flex;
+                flex-direction: column;
+                z-index: 500;
+            }
+            .sidebar-header {
+                padding: 12px 15px;
+                border-bottom: 1px solid #334155;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .search-box {
+                width: 100%;
+                background: #0f172a;
+                border: 1px solid #334155;
+                color: #f8fafc;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 0.85rem;
+                outline: none;
+            }
+            .search-box:focus {
+                border-color: #38bdf8;
+            }
+
+            .vehicle-list {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px;
+            }
+            .vehicle-card {
+                background: #334155;
+                padding: 12px;
+                border-radius: 6px;
+                margin-bottom: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+                border-left: 4px solid #64748b;
+            }
+            .vehicle-card:hover {
+                background: #475569;
+                transform: translateX(2px);
+            }
+            .vehicle-card.active {
+                border-left-color: #38bdf8;
+                background: #3b82f622;
+            }
+
+            .vehicle-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .vehicle-plate {
+                font-weight: bold;
+                color: #f1f5f9;
+                font-size: 0.95rem;
+            }
+            .vehicle-speed {
+                font-size: 0.8rem;
+                font-weight: bold;
+                padding: 2px 6px;
+                border-radius: 4px;
+                background: #0f172a;
+                color: #38bdf8;
+            }
+            .vehicle-info {
+                font-size: 0.78rem;
+                color: #94a3b8;
+                margin-top: 6px;
+                display: flex;
+                justify-content: space-between;
+            }
+
+            /* Container do Mapa */
+            #map {
+                flex: 1;
+                background: #020617;
+            }
+
+            /* Botões Flutuantes sobre o Mapa */
+            .map-controls {
+                position: absolute;
+                top: 15px;
+                right: 15px;
+                z-index: 1000;
+                display: flex;
+                gap: 8px;
+            }
+            .map-btn {
+                background: #1e293b;
+                color: #f8fafc;
+                border: 1px solid #334155;
+                padding: 8px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.8rem;
+                font-weight: 600;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+                transition: all 0.2s;
+            }
+            .map-btn:hover {
+                background: #334155;
+                color: #38bdf8;
+            }
+
+            /* Ícones de Veículos */
+            .vehicle-icon-wrapper {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: transform 0.2s linear;
+            }
+
+            /* Painel Flutuante de Alertas */
+            .alerts-panel {
+                position: absolute;
+                bottom: 20px;
+                right: 20px;
+                width: 380px;
+                max-height: 240px;
+                background: rgba(15, 23, 42, 0.92);
+                border: 1px solid #ef4444;
+                border-radius: 8px;
+                z-index: 1000;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                backdrop-filter: blur(8px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            }
+            .alerts-header {
+                background: #7f1d1d;
+                color: #fecaca;
+                padding: 8px 12px;
+                font-size: 0.8rem;
+                font-weight: bold;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .alerts-log {
+                padding: 10px;
+                overflow-y: auto;
+                font-family: "Courier New", Courier, monospace;
+                font-size: 0.78rem;
+            }
+            .alert-item {
+                background: #450a0a;
+                border-left: 3px solid #ef4444;
+                padding: 8px;
+                border-radius: 4px;
+                margin-bottom: 6px;
+                color: #fca5a5;
+            }
+            .alert-time {
+                font-size: 0.7rem;
+                color: #f87171;
+            }
+        </style>
+    </head>
+    <body>
+        <header>
+            <div class="brand">
+                <h1>📡 FLEET TELEMETRY - NOC CONTROL</h1>
+                <div id="connectionStatus" class="status-badge disconnected">
+                    Desconectado
+                </div>
+            </div>
+
+            <!-- Indicadores de Desempenho em Tempo Real (KPIs) -->
+            <div class="kpi-container">
+                <div class="kpi-card">
+                    <span id="kpiTotal" class="kpi-value">0</span>
+                    <span class="kpi-label">Frota Total</span>
+                </div>
+                <div class="kpi-card">
+                    <span
+                        id="kpiMoving"
+                        class="kpi-value"
+                        style="color: #34d399"
+                        >0</span
+                    >
+                    <span class="kpi-label">Em Trânsito</span>
+                </div>
+                <div class="kpi-card">
+                    <span
+                        id="kpiStopped"
+                        class="kpi-value"
+                        style="color: #94a3b8"
+                        >0</span
+                    >
+                    <span class="kpi-label">Parados</span>
+                </div>
+                <div class="kpi-card">
+                    <span
+                        id="kpiAlerts"
+                        class="kpi-value"
+                        style="color: #f87171"
+                        >0</span
+                    >
+                    <span class="kpi-label">Alertas</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="search-box"
+                        placeholder="🔍 Buscar por placa ou marca..."
+                        oninput="filterVehicles()"
+                    />
+                </div>
+                <div id="vehicleList" class="vehicle-list">
+                    <div
+                        style="
+                            color: #94a3b8;
+                            font-size: 0.85rem;
+                            padding: 10px;
+                        "
+                    >
+                        Carregando frota...
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Container do Mapa -->
+            <div id="map"></div>
+
+            <!-- Botões de Controle no Mapa -->
+            <div class="map-controls">
+                <button class="map-btn" onclick="fitAllVehicles()">
+                    🔍 Ver Toda Frota
+                </button>
+                <button class="map-btn" onclick="clearTrails()">
+                    🧹 Limpar Rastros
+                </button>
+            </div>
+
+            <!-- Painel de Alertas -->
+            <div class="alerts-panel">
+                <div class="alerts-header">
+                    <span>🚨 EVENTOS DE RISCO</span>
+                    <span
+                        id="alertCountBadge"
+                        style="
+                            background: #ef4444;
+                            color: white;
+                            padding: 2px 6px;
+                            border-radius: 10px;
+                            font-size: 0.7rem;
+                        "
+                        >0</span
+                    >
+                </div>
+                <div id="alertsLog" class="alerts-log">
+                    <div style="color: #64748b">
+                        Aguardando eventos do broker...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const streetTile = L.tileLayer(
+                "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+                    maxZoom: 19,
+                    attribution:
+                        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+                },
+            );
+
+            const map = L.map("map", { layers: [streetTile] }).setView(
+                [-23.55052, -46.633308],
+                12,
+            );
+            let currentTileMode = "dark";
+
+            const vehicleState = {};
+            const vehicleInfoCache = {};
+            let totalAlertsCount = 0;
+            let stompClient = null;
+
+            // SVGs Inline
+            function getVehicleSvg(type = "TRUCK", color = "#38bdf8") {
+                const t = type.toUpperCase();
+                if (t.includes("MOTO")) {
+                    return `<svg width="34" height="34" viewBox="0 0 24 24" fill="${color}"><path d="M5 18l3-7h4l3 3h4"/><circle cx="5" cy="18" r="3"/><circle cx="19" cy="18" r="3"/></svg>`;
+                } else if (t.includes("CAR")) {
+                    return `<svg width="36" height="36" viewBox="0 0 24 24" fill="${color}"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99z"/></svg>`;
+                } else {
+                    return `<svg width="38" height="38" viewBox="0 0 24 24" fill="${color}"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>`;
+                }
+            }
+
+            // 1. Carrega Frota Cadastrada (REST)
+            async function loadVehicles() {
+                try {
+                    const response = await fetch("/api/vehicles");
+                    const vehicles = await response.json();
+
+                    document.getElementById("kpiTotal").textContent =
+                        vehicles.length;
+
+                    vehicles.forEach((vehicle) => {
+                        vehicleInfoCache[vehicle.id] = vehicle;
+                        loadLastPosition(vehicle.id, vehicle.licensePlate);
+                    });
+
+                    renderVehicleList(vehicles);
+                } catch (error) {
+                    console.error("Erro ao buscar veículos via REST:", error);
+                }
+            }
+
+            function renderVehicleList(vehicles) {
+                const listContainer = document.getElementById("vehicleList");
+                listContainer.innerHTML = "";
+
+                vehicles.forEach((v) => {
+                    const state = vehicleState[v.id];
+                    const speedText = state
+                        ? `${state.lastSpeed.toFixed(0)} km/h`
+                        : "0 km/h";
+
+                    const card = document.createElement("div");
+                    card.className = "vehicle-card";
+                    card.id = `card-${v.id}`;
+                    card.onclick = () => focusVehicle(v.id);
+                    card.innerHTML = `
+                    <div class="vehicle-header">
+                        <span class="vehicle-plate">${v.licensePlate}</span>
+                        <span class="vehicle-speed" id="speed-${v.id}">${speedText}</span>
+                    </div>
+                    <div class="vehicle-info">
+                        <span>${v.brand} ${v.model}</span>
+                        <span style="color: ${v.vehicleStatus === "ACTIVE" ? "#34d399" : "#f87171"}">${v.vehicleStatus}</span>
+                    </div>
+                `;
+                    listContainer.appendChild(card);
+                });
+            }
+
+            function filterVehicles() {
+                const query = document
+                    .getElementById("searchInput")
+                    .value.toLowerCase();
+                const filtered = Object.values(vehicleInfoCache).filter(
+                    (v) =>
+                        v.licensePlate.toLowerCase().includes(query) ||
+                        v.brand.toLowerCase().includes(query) ||
+                        v.model.toLowerCase().includes(query),
+                );
+                renderVehicleList(filtered);
+            }
+
+            async function loadLastPosition(vehicleId, licensePlate) {
+                try {
+                    const res = await fetch(
+                        `/api/vehicles/${vehicleId}/last-position`,
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        updateMapMarker(data, true);
+                    }
+                } catch (err) {
+                    console.warn(`Sem histórico recente para ${licensePlate}`);
+                }
+            }
+
+            // Cálculo de Ângulo (Bearing) para Rotação do Veículo
+            function calculateHeading(lat1, lng1, lat2, lng2) {
+                const dLng = ((lng2 - lng1) * Math.PI) / 180;
+                const y = Math.sin(dLng) * Math.cos((lat2 * Math.PI) / 180);
+                const x =
+                    Math.cos((lat1 * Math.PI) / 180) *
+                        Math.sin((lat2 * Math.PI) / 180) -
+                    Math.sin((lat1 * Math.PI) / 180) *
+                        Math.cos((lat2 * Math.PI) / 180) *
+                        Math.cos(dLng);
+                let brng = (Math.atan2(y, x) * 180) / Math.PI;
+                return (brng + 360) % 360;
+            }
+
+            // 2. Atualiza Posição, Rastro e Marcadores
+            function updateMapMarker(telemetry, isInitial = false) {
+                if (!telemetry) return;
+
+                const vehicleId = telemetry.vehicleId || telemetry.id;
+                const licensePlate = telemetry.licensePlate || "Veículo";
+                const lat = parseFloat(telemetry.latitude ?? telemetry.lat);
+                const lng = parseFloat(telemetry.longitude ?? telemetry.lng);
+                const speed = telemetry.speed ?? 0;
+                const engineTemp =
+                    telemetry.engineTemperature ?? telemetry.engineTemp ?? 0;
+
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                const vehicleData = vehicleInfoCache[vehicleId] || {};
+                const type = vehicleData.type || vehicleData.model || "TRUCK";
+
+                if (vehicleState[vehicleId]) {
+                    const state = vehicleState[vehicleId];
+                    state.lastSpeed = speed;
+
+                    // Atualiza velocidade na lista lateral
+                    const speedLabel = document.getElementById(
+                        `speed-${vehicleId}`,
+                    );
+                    if (speedLabel)
+                        speedLabel.textContent = `${speed.toFixed(0)} km/h`;
+
+                    // Calcula ângulo de rotação
+                    const heading = calculateHeading(
+                        state.currentLat,
+                        state.currentLng,
+                        lat,
+                        lng,
+                    );
+
+                    // Desenha rastro do percurso (Polyline)
+                    state.trail.addLatLng([lat, lng]);
+
+                    // Atualiza Popup
+                    state.marker.getPopup().setContent(`
+                    <b>Placa:</b> ${licensePlate}<br>
+                    <b>Velocidade:</b> ${speed.toFixed(1)} km/h<br>
+                    <b>Temp. Motor:</b> ${engineTemp.toFixed(1)} °C
+                `);
+
+                    if (!isInitial) {
+                        animateMovement(
+                            vehicleId,
+                            state.currentLat,
+                            state.currentLng,
+                            lat,
+                            lng,
+                            heading,
+                            1000,
+                        );
+                    } else {
+                        state.marker.setLatLng([lat, lng]);
+                        state.currentLat = lat;
+                        state.currentLng = lng;
+                    }
+                } else {
+                    // Cria Novo Marcador e Polyline de Rastro
+                    const iconHtml = `<div id="icon-${vehicleId}" class="vehicle-icon-wrapper">${getVehicleSvg(type, "#38bdf8")}</div>`;
+                    const customIcon = L.divIcon({
+                        html: iconHtml,
+                        className: "",
+                        iconSize: [38, 38],
+                        iconAnchor: [19, 19],
+                    });
+
+                    const marker = L.marker([lat, lng], {
+                        icon: customIcon,
+                    }).addTo(map);
+                    marker.bindPopup(
+                        `<b>Placa:</b> ${licensePlate}<br><b>Velocidade:</b> ${speed.toFixed(1)} km/h`,
+                    );
+
+                    const trail = L.polyline([[lat, lng]], {
+                        color: "#38bdf8",
+                        weight: 3,
+                        opacity: 0.6,
+                        dashArray: "5, 10",
+                    }).addTo(map);
+
+                    vehicleState[vehicleId] = {
+                        marker: marker,
+                        trail: trail,
+                        currentLat: lat,
+                        currentLng: lng,
+                        lastSpeed: speed,
+                        animationFrame: null,
+                    };
+                }
+
+                updateKpis();
+            }
+
+            // Animação com Rotação em Graus
+            function animateMovement(
+                vehicleId,
+                startLat,
+                startLng,
+                endLat,
+                endLng,
+                heading,
+                duration,
+            ) {
+                const state = vehicleState[vehicleId];
+                if (!state) return;
+
+                if (state.animationFrame)
+                    cancelAnimationFrame(state.animationFrame);
+
+                const startTime = performance.now();
+                const iconElem = document.getElementById(`icon-${vehicleId}`);
+
+                if (iconElem && heading > 0) {
+                    iconElem.style.transform = `rotate(${heading}deg)`;
+                }
+
+                function step(currentTime) {
+                    const elapsed = currentTime - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+
+                    const currentLat =
+                        startLat + (endLat - startLat) * progress;
+                    const currentLng =
+                        startLng + (endLng - startLng) * progress;
+
+                    state.marker.setLatLng([currentLat, currentLng]);
+                    state.currentLat = currentLat;
+                    state.currentLng = currentLng;
+
+                    if (progress < 1) {
+                        state.animationFrame = requestAnimationFrame(step);
+                    }
+                }
+
+                state.animationFrame = requestAnimationFrame(step);
+            }
+
+            // Recalcula KPIs no Header
+            function updateKpis() {
+                let moving = 0;
+                let stopped = 0;
+
+                Object.values(vehicleState).forEach((state) => {
+                    if (state.lastSpeed > 3) moving++;
+                    else stopped++;
+                });
+
+                document.getElementById("kpiMoving").textContent = moving;
+                document.getElementById("kpiStopped").textContent = stopped;
+            }
+
+            function focusVehicle(vehicleId) {
+                if (vehicleState[vehicleId]) {
+                    const marker = vehicleState[vehicleId].marker;
+                    map.setView(marker.getLatLng(), 15);
+                    marker.openPopup();
+
+                    // Destaca Card Ativo
+                    document
+                        .querySelectorAll(".vehicle-card")
+                        .forEach((c) => c.classList.remove("active"));
+                    const card = document.getElementById(`card-${vehicleId}`);
+                    if (card) card.classList.add("active");
+                }
+            }
+
+            function fitAllVehicles() {
+                const markersArray = Object.values(vehicleState).map(
+                    (s) => s.marker,
+                );
+                if (markersArray.length > 0) {
+                    const group = L.featureGroup(markersArray);
+                    map.fitBounds(group.getBounds().pad(0.2));
+                }
+            }
+
+            function clearTrails() {
+                Object.values(vehicleState).forEach((state) => {
+                    if (state.trail) state.trail.setLatLngs([]);
+                });
+            }
+
+            // 3. Conexão WebSocket StompJS
+            function connectWebSocket() {
+                const socket = new SockJS("/ws-fleet");
+                stompClient = Stomp.over(socket);
+                stompClient.debug = null;
+
+                stompClient.connect(
+                    {},
+                    function () {
+                        setConnectionStatus(true);
+
+                        stompClient.subscribe(
+                            "/topic/telemetry",
+                            function (response) {
+                                const telemetry = JSON.parse(response.body);
+                                updateMapMarker(telemetry);
+                            },
+                        );
+
+                        stompClient.subscribe(
+                            "/topic/alerts",
+                            function (response) {
+                                const alert = JSON.parse(response.body);
+                                renderAlert(alert);
+                            },
+                        );
+                    },
+                    function (error) {
+                        setConnectionStatus(false);
+                        setTimeout(connectWebSocket, 5000);
+                    },
+                );
+            }
+
+            function setConnectionStatus(isConnected) {
+                const badge = document.getElementById("connectionStatus");
+                if (isConnected) {
+                    badge.textContent = "ONLINE";
+                    badge.className = "status-badge connected";
+                } else {
+                    badge.textContent = "OFFLINE";
+                    badge.className = "status-badge disconnected";
+                }
+            }
+
+            function renderAlert(alert) {
+                const container = document.getElementById("alertsLog");
+                const time = new Date(alert.timestamp).toLocaleTimeString();
+
+                if (
+                    container.children[0] &&
+                    container.children[0].textContent.includes("Aguardando")
+                ) {
+                    container.innerHTML = "";
+                }
+
+                totalAlertsCount++;
+                document.getElementById("kpiAlerts").textContent =
+                    totalAlertsCount;
+                document.getElementById("alertCountBadge").textContent =
+                    totalAlertsCount;
+
+                const alertDiv = document.createElement("div");
+                alertDiv.className = "alert-item";
+                alertDiv.innerHTML = `
+                <div><strong>[${alert.type}]</strong> ${alert.description}</div>
+                <div class="alert-time">${time}</div>
+            `;
+
+                container.prepend(alertDiv);
+            }
+
+            window.onload = () => {
+                loadVehicles();
+                connectWebSocket();
+            };
+        </script>
+    </body>
+</html>
